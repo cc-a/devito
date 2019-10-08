@@ -36,7 +36,7 @@ class AbstractSparseFunction(DiscreteFunction, Differentiable):
     """SubFunctions encapsulated within this AbstractSparseFunction."""
 
     def __init__(self, *args, **kwargs):
-        if not self._cached():
+        if not self._cached(self._cache_key):
             super(AbstractSparseFunction, self).__init__(*args, **kwargs)
             self._npoint = kwargs['npoint']
             self._space_order = kwargs.get('space_order', 0)
@@ -325,7 +325,7 @@ class AbstractSparseTimeFunction(AbstractSparseFunction):
     """Position of time index among the function indices."""
 
     def __init__(self, *args, **kwargs):
-        if not self._cached():
+        if not self._cached(self._cache_key):
             self._time_dim = self.indices[self._time_position]
             self._time_order = kwargs.get('time_order', 1)
             if not isinstance(self.time_order, int):
@@ -470,7 +470,7 @@ class SparseFunction(AbstractSparseFunction):
     _sub_functions = ('coordinates',)
 
     def __init__(self, *args, **kwargs):
-        if not self._cached():
+        if not self._cached(self._cache_key):
             super(SparseFunction, self).__init__(*args, **kwargs)
 
             # Set up sparse point coordinates
@@ -1068,7 +1068,7 @@ class PrecomputedSparseFunction(AbstractSparseFunction):
     _sub_functions = ('gridpoints', 'interpolation_coeffs')
 
     def __init__(self, *args, **kwargs):
-        if not self._cached():
+        if not self._cached(self._cache_key):
             super(PrecomputedSparseFunction, self).__init__(*args, **kwargs)
 
             # Grid points per sparse point (2 in the case of bilinear and trilinear)

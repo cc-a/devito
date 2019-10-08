@@ -45,7 +45,7 @@ class Constant(AbstractCachedSymbol, ArgProvider):
     is_Scalar = True
 
     def __init__(self, *args, **kwargs):
-        if not self._cached():
+        if not self._cached(self._cache_key):
             self._value = kwargs.get('value', 0)
 
     @classmethod

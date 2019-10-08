@@ -50,7 +50,7 @@ class DiscreteFunction(AbstractCachedFunction, ArgProvider):
     is_Tensor = True
 
     def __init__(self, *args, **kwargs):
-        if not self._cached():
+        if not self._cached(self._cache_key):
             # A `Distributor` to handle domain decomposition (only relevant for MPI)
             self._distributor = self.__distributor_setup__(**kwargs)
 
@@ -933,7 +933,7 @@ class Function(DiscreteFunction, Differentiable):
         return {'nbytes': self.size}
 
     def __init__(self, *args, **kwargs):
-        if not self._cached():
+        if not self._cached(self._cache_key):
             super(Function, self).__init__(*args, **kwargs)
 
             # Space order
@@ -1214,7 +1214,7 @@ class TimeFunction(Function):
     """Position of time index among the function indices."""
 
     def __init__(self, *args, **kwargs):
-        if not self._cached():
+        if not self._cached(self._cache_key):
             self.time_dim = kwargs.get('time_dim', self.dimensions[self._time_position])
             self._time_order = kwargs.get('time_order', 1)
             super(TimeFunction, self).__init__(*args, **kwargs)
@@ -1326,7 +1326,7 @@ class SubFunction(Function):
     """
 
     def __init__(self, *args, **kwargs):
-        if not self._cached():
+        if not self._cached(self._cache_key):
             super(SubFunction, self).__init__(*args, **kwargs)
             self._parent = kwargs['parent']
 

@@ -9,10 +9,10 @@ from operator import mul
 
 import numpy as np
 import sympy
-
 from sympy.core.cache import cacheit
 from cached_property import cached_property
 from cgen import Struct, Value
+from frozendict import frozendict
 
 from devito.data import default_allocator
 from devito.parameters import configuration
@@ -163,7 +163,7 @@ class Cached(object):
 
         .. code-block::
             def __init__(self, \*args, \*\*kwargs):
-                if not self._cached():
+                if not self._cached(self._cache_key):
                     ... # Initialise object properties from kwargs
     """
 
@@ -175,40 +175,39 @@ class Cached(object):
             return obj
 
     @classmethod
-    def _cache_put(cls, obj):
+    def _cached(cls, key):
+        """Test if an object is in the symbol cache and is still alive."""
+        if key not in _SymbolCache:
+            return False
+        return _SymbolCache[key]() is not None
+
+    @classmethod
+    def _cache_makekey(cls, *args, **kwargs):
+        """A cache key from the given arguments."""
+        return cls
+
+    @classmethod
+    def _cache_put(cls, key, obj):
         """
         Store the given object instance in the symbol cache.
 
         Parameters
         ----------
+        key : key
+            The cache key.
         obj : object
             Object to be cached.
         """
-        _SymbolCache[obj._cache_key()] = cls.AugmentedWeakRef(obj, obj._cache_meta())
+        _SymbolCache[key] = cls.AugmentedWeakRef(obj, obj._cache_meta())
 
     @classmethod
     def _symbol_type(cls, name):
         """Create new type instance from cls and inject symbol name."""
         return type(name, (cls, ), dict(cls.__dict__))
 
-    def _cached(self):
-        """Test if the current object is already in the symbol cache."""
-        key = self._cache_key()
-        if key not in _SymbolCache:
-            return False
-        return _SymbolCache[key]() is not None
-
     def _cache_meta(self):
         """Additional attributes attached to a cached object."""
         return {}
-
-    def _cache_key(self):
-        """
-        A cache key for the given object.
-
-        By default, objects are cached on their class type.
-        """
-        return self.__class__
 
     def _cached_init(self):
         """Initialise symbolic object with a cached object state."""
@@ -347,36 +346,44 @@ class AbstractSymbol(sympy.Symbol, Basic, Pickable, Evaluable):
 
 
 class AbstractCachedSymbol(AbstractSymbol, Cached):
+
     """
     Base class for scalar symbols, cached by both Devito and SymPy.
 
     For more information, refer to the documentation of AbstractSymbol.
     """
 
-    def __new__(cls, name, **kwargs):
-        # Create the new Symbol and invoke __init__
-        newcls = cls._symbol_type(name)
-        newobj = sympy.Symbol.__new__(newcls, name, **kwargs)
-
-        # Initialization
-        newobj._dtype = cls.__dtype_setup__(**kwargs)
-        newobj._is_const = kwargs.get('is_const')
-        newobj.__init__(name, **kwargs)
-
-        # Store new instance in symbol cache
-        if newobj._cached():
-            # `newobj` is symbolically identical to `SymbolCache[newobj]` (i.e.,
-            # hash the same), but it's physically a different object. We return
-            # the cached object, and silently drop `newobj` on the floor
-            return _SymbolCache[newobj._cache_key()]()
+    def __new__(cls, *args, **kwargs):
+        key = cls._cache_makekey(*args, **kwargs)
+        if kwargs.get('name') == 'u':
+            from IPython import embed; embed()
+        if cls._cached(key):
+            return _SymbolCache[key]()
         else:
-            newcls._cache_put(newobj)
+            options = dict(kwargs)
+
+            # Create the new Symbol and invoke __init__
+            name = options.pop('name', None) or args[0]
+            newcls = cls._symbol_type(name)
+            newobj = sympy.Symbol.__new__(newcls, name, **options)
+
+            # Attach the cache key, to be used by __init__
+            newobj._cache_key = key
+
+            # Initialization
+            newobj._dtype = cls.__dtype_setup__(**kwargs)
+            newobj.__init__(*args, **kwargs)
+
+            # Store new instance in symbol cache
+            newcls._cache_put(key, newobj)
+
             return newobj
 
-    __hash__ = Cached.__hash__
+    def __init__(self, *args, **kwargs):
+        if not self._cached(self._cache_key):
+            self._is_const = kwargs.get('is_const')
 
-    def _hashable_content(self):
-        return super()._hashable_content() + (self.is_const,)
+    __hash__ = Cached.__hash__
 
     @classmethod
     def __dtype_setup__(cls, **kwargs):
@@ -405,17 +412,16 @@ class Symbol(AbstractCachedSymbol):
 
     is_Symbol = True
 
-    def _cache_key(self):
+    @classmethod
+    def _cache_makekey(cls, *args, **kwargs):
         """
-        Symbols cache on their hashable content.
-
         Notes
         -----
         A Symbol may not be in the SymPy cache, but still be present in the
         Devito cache. This is because SymPy caches operations, rather than
         actual objects.
         """
-        return self._hashable_content()
+        return (tuple(args), frozendict(kwargs))
 
 
 class Scalar(Symbol, ArgProvider):
@@ -501,7 +507,8 @@ class AbstractCachedFunction(AbstractFunction, Cached, Evaluable):
 
     def __new__(cls, *args, **kwargs):
         options = kwargs.get('options', {})
-        if cls in _SymbolCache:
+        key = cls._cache_makekey(*args, **kwargs)
+        if cls._cached(key):
             newobj = sympy.Function.__new__(cls, *args, **options)
             newobj._cached_init()
         else:
@@ -511,6 +518,9 @@ class AbstractCachedFunction(AbstractFunction, Cached, Evaluable):
             # Create the new Function object and invoke __init__
             newcls = cls._symbol_type(name)
             newobj = sympy.Function.__new__(newcls, *indices, **options)
+
+            # Attach the cache key, to be used by __init__
+            newobj._cache_key = newcls
 
             # Initialization. The following attributes must be available
             # when executing __init__
@@ -526,11 +536,11 @@ class AbstractCachedFunction(AbstractFunction, Cached, Evaluable):
             newobj.function = newobj
 
             # Store new instance in symbol cache
-            newcls._cache_put(newobj)
+            newcls._cache_put(newcls, newobj)
         return newobj
 
     def __init__(self, *args, **kwargs):
-        if not self._cached():
+        if not self._cached(self._cache_key):
             # Setup halo and padding regions
             self._is_halo_dirty = False
             self._halo = self.__halo_setup__(**kwargs)
@@ -839,7 +849,7 @@ class Array(AbstractCachedFunction):
         return AbstractCachedFunction.__new__(cls, *args, **kwargs)
 
     def __init__(self, *args, **kwargs):
-        if not self._cached():
+        if not self._cached(self._cache_key):
             super(Array, self).__init__(*args, **kwargs)
 
             self._scope = kwargs.get('scope', 'heap')
@@ -1086,7 +1096,7 @@ class IndexedData(sympy.IndexedBase, Pickable):
     def __new__(cls, label, shape=None, function=None):
         # Make sure `label` is a devito.Symbol, not a sympy.Symbol
         if isinstance(label, str):
-            label = Symbol(label, dtype=function.dtype)
+            label = Symbol(name=label, dtype=function.dtype)
         obj = sympy.IndexedBase.__new__(cls, label, shape)
         obj.function = function
         return obj
