@@ -112,9 +112,7 @@ class DiscreteFunction(AbstractCachedFunction, ArgProvider):
             if self._data is None:
                 debug("Allocating memory for %s%s" % (self.name, self.shape_allocated))
 
-                # Clear up both SymPy and Devito caches. Any stale object carrying data
-                # that is no longer in use within user code should now be dropped to free
-                # up memory
+                # Clear up both SymPy and Devito caches to drop unreachable data
                 CacheManager.clear(force=False)
 
                 # Allocate the actual data object
