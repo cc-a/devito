@@ -295,6 +295,7 @@ def plot(problem, **kwargs):
     autotune = kwargs['autotune']
 
     arch = kwargs['arch']
+
     space_order = "[%s]" % ",".join(str(i) for i in kwargs['space_order'])
     time_order = kwargs['time_order']
     shape = "[%s]" % ",".join(str(i) for i in kwargs['shape'])
@@ -322,8 +323,8 @@ def plot(problem, **kwargs):
              if len(set(dict(j)[i] for j in gflopss)) > 1]
 
     # Filename
-    figname = "%s_dim%s_so%s_to%s_arch[%s]_bkend[%s]_at[%s]pdf" % (
-        problem, shape, space_order, time_order, arch, backend, autotune
+    figname = "%s_arch[%s]_shape%s_so%s_to%s_bkend[%s]_at[%s]" % (
+        problem, arch, shape, space_order, time_order, backend, autotune
     )
 
     # Legend setup. Do not plot a legend if there's no variation in performance
@@ -413,9 +414,6 @@ def get_ob_bench(problem, resultsdir, parameters):
                 devito_params['np'] = MPI.COMM_WORLD.size
                 devito_params['rank'] = MPI.COMM_WORLD.rank
                 devito_params['mpi'] = configuration['mpi']
-            else:
-                devito_params['np'] = 1
-                devito_params['rank'] = 0
 
             return '_'.join(['%s[%s]' % (k, v) for k, v in devito_params.items()])
 
