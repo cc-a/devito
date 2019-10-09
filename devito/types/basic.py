@@ -497,10 +497,8 @@ class AbstractCachedFunction(AbstractFunction, Cached, Evaluable):
     """
 
     def __new__(cls, *args, **kwargs):
-        key = cls._cache_key(*args, **kwargs)
-
         options = kwargs.get('options', {})
-        if cls._cached(key):
+        if cls._cached():
             newobj = sympy.Function.__new__(cls, *args, **options)
             newobj._cached_init()
         else:

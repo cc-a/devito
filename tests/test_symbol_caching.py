@@ -227,7 +227,6 @@ def test_clear_cache_with_alive_symbols(nx=1000, ny=1000):
     # And obviously, still:
     assert s3 is s2
 
-    a = dict(_SymbolCache)
     cache_size = len(_SymbolCache)
     del s2
     del s3
