@@ -52,7 +52,7 @@ def test_abstract_symbols():
     """
     Test that ``Symbol(name='s') != Scalar(name='s') != Dimension(name='s')``.
     They all:
-    
+
         * rely on the same caching mechanism
         * boil down to creating a sympy.Symbol
         * created with the same args/kwargs (``name='s'``)

@@ -1,5 +1,4 @@
 import abc
-import gc
 from collections import namedtuple
 from ctypes import POINTER, Structure, byref
 from functools import reduce
@@ -437,7 +436,6 @@ class Scalar(Symbol, ArgProvider):
     is_Scalar = True
 
     _default_dtype = np.float32
-
 
 
 class AbstractFunction(sympy.Function, Basic, Pickable):

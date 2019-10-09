@@ -1,10 +1,8 @@
 from collections import namedtuple
 
 import sympy
-from sympy.core.cache import cacheit
 import numpy as np
 from cached_property import cached_property
-from frozendict import frozendict
 
 from devito.data import LEFT, RIGHT
 from devito.exceptions import InvalidArgument
@@ -356,8 +354,7 @@ class DerivedDimension(Dimension):
     is_Derived = True
 
     _keymap = {}
-    """Map all seen instance `_properties` to a unique number. This is used
-    to create unique Dimension names."""
+    """Used to create unique Dimension names based on seen kwargs."""
 
     def __init_finalize__(self, name, parent):
         assert isinstance(parent, Dimension)
@@ -783,7 +780,7 @@ class ModuloDimension(DerivedDimension):
     def __new__(cls, parent, offset, modulo, name=None):
         if name is None:
             name = cls._genname(parent.name, (offset, modulo))
-        return super().__new__(cls, parent, offset, modulo, name=name) 
+        return super().__new__(cls, parent, offset, modulo, name=name)
 
     def __init_finalize__(self, parent, offset, modulo, name=None):
         super().__init_finalize__(name, parent)
@@ -857,7 +854,7 @@ class IncrDimension(DerivedDimension):
     def __new__(cls, parent, _min=None, step=None, name=None):
         if name is None:
             name = cls._genname(parent.name, (_min, step))
-        return super().__new__(cls, parent, offset, modulo, name=name) 
+        return super().__new__(cls, parent, _min=_min, step=step, name=name)
 
     def __init_finalize__(self, parent, _min=None, step=None, name=None):
         super().__init_finalize__(name, parent)

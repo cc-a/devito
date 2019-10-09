@@ -22,7 +22,7 @@ from devito.profiling import create_profile
 from devito.symbolics import indexify
 from devito.tools import (DAG, Signer, ReducerMap, as_tuple, flatten, filter_ordered,
                           filter_sorted, split)
-from devito.types import CacheManager, Dimension
+from devito.types import Dimension
 
 __all__ = ['Operator']
 
@@ -156,28 +156,6 @@ class Operator(Callable):
         # Internal state. May be used to store information about previous runs,
         # autotuning reports, etc
         self._state = self._initialize_state(**kwargs)
-
-        def foo(exprs):
-            from devito.symbolics import retrieve_terminals
-            pxs, pys = [], []
-            for e in exprs:
-                pxs.extend([i for i in retrieve_terminals(e, mode='all') if i.name == 'px'])
-                pys.extend([i for i in retrieve_terminals(e, mode='all') if i.name == 'py'])
-            print('pxs')
-            for i in pxs:
-                print("  ", id(i))
-            print('pys')
-            for i in pys:
-                print("  ", id(i))
-
-        # Form and gather any required implicit expressions
-        #aa = expressions
-        #if len(expressions) == 12:
-        #    d = aa[9].rhs.args[2].args[0]
-        #    px1 = d.args[1]
-        #    px2 = d.xreplace(subs).args[1]
-        #    print(id(px1), id(px2))
-        #    from IPython import embed; embed()
 
         expressions = self._add_implicit(expressions)
 
