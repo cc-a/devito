@@ -168,6 +168,48 @@ def test_clear_cache(nx=1000, ny=1000):
         clear_cache()
 
 
+def test_clear_cache_with_alive_symbols(nx=1000, ny=1000):
+    grid = Grid(shape=(nx, ny), dtype=np.float64)
+
+    f0 = Function(name='f', grid=grid, space_order=2)
+    f1 = Function(name='f', grid=grid, space_order=2)
+
+    # Obviously:
+    assert f0 is not f1
+
+    # And clearly, both still alive after a `clear_cache`
+    clear_cache()
+    assert f0 is not f1
+    assert f0.grid.dimensions[0] is grid.dimensions[0]
+
+    # Now we try with symbols
+    s0 = Scalar(name='s')
+    s1 = Scalar(name='s')
+
+    # Clearly:
+    assert s1 is s0
+
+    clear_cache()
+    s2 = Scalar(name='s')
+
+    # s2 must still be s1/so, even after a clear_cache, as so/s1 are both alive!
+    assert s2 is s1
+
+    del s0
+    del s1
+    s3 = Scalar(name='s')
+
+    # And obviously, still:
+    assert s3 is s2
+
+    a = dict(_SymbolCache)
+    cache_size = len(_SymbolCache)
+    del s2
+    del s3
+    clear_cache()
+    assert len(_SymbolCache) == cache_size - 1
+
+
 def test_cache_after_indexification():
     """Test to assert that the SymPy cache retrieves the right Devito data object
     after indexification.

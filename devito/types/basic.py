@@ -273,6 +273,10 @@ class AbstractCachedUniqueSymbol(AbstractSymbol, Cached):
         args = list(args)
         key = {}
 
+        # The base type is necessary, otherwise two objects such as
+        # `Scalar(name='s')` and `Dimension(name='s')` would have the same key
+        key['cls'] = cls
+
         # The name is always present, and added as if it were an arg
         key['name'] = kwargs.pop('name', None) or args.pop(0)
 
