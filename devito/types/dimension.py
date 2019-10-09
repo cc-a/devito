@@ -11,14 +11,14 @@ from devito.exceptions import InvalidArgument
 from devito.logger import debug
 from devito.tools import Pickable, dtype_to_cstr
 from devito.types.args import ArgProvider
-from devito.types.basic import AbstractCachedSymbol, Scalar
+from devito.types.basic import AbstractCachedUniqueSymbol, Scalar
 
 __all__ = ['Dimension', 'SpaceDimension', 'TimeDimension', 'DefaultDimension',
            'SteppingDimension', 'SubDimension', 'ConditionalDimension', 'dimensions',
            'ModuloDimension', 'IncrDimension']
 
 
-class Dimension(AbstractCachedSymbol, ArgProvider):
+class Dimension(AbstractCachedUniqueSymbol, ArgProvider):
 
     """
     Symbol defining an iteration space.
@@ -91,11 +91,7 @@ class Dimension(AbstractCachedSymbol, ArgProvider):
     _C_typename = 'const %s' % dtype_to_cstr(dtype)
     _C_typedata = _C_typename
 
-    @classmethod
-    def _cache_key(cls, *args, **kwargs):
-        return (tuple(args), frozendict(kwargs))
-
-    def __init__(self, name, spacing=None):
+    def __init_finalize__(self, name, spacing=None):
         self._spacing = spacing or Scalar(name='h_%s' % name, is_const=True)
 
     def __str__(self):
@@ -363,7 +359,7 @@ class DerivedDimension(Dimension):
     """Map all seen instance `_properties` to a unique number. This is used
     to create unique Dimension names."""
 
-    def __init__(self, name, parent):
+    def __init_finalize__(self, name, parent):
         assert isinstance(parent, Dimension)
         self._parent = parent
         # Inherit time/space identifiers
@@ -457,8 +453,8 @@ class SubDimension(DerivedDimension):
 
     is_Sub = True
 
-    def __init__(self, name, parent, left, right, thickness, local):
-        super().__init__(name, parent)
+    def __init_finalize__(self, name, parent, left, right, thickness, local):
+        super().__init_finalize__(name, parent)
         self._interval = sympy.Interval(left, right)
         self._thickness = self._Thickness(*thickness)
         self._local = local
@@ -657,8 +653,9 @@ class ConditionalDimension(DerivedDimension):
     is_NonlinearDerived = True
     is_Conditional = True
 
-    def __init__(self, name, parent, factor=None, condition=None, indirect=False):
-        super().__init__(name, parent)
+    def __init_finalize__(self, name, parent, factor=None, condition=None,
+                          indirect=False):
+        super().__init_finalize__(name, parent)
         self._factor = factor
         self._condition = condition
         self._indirect = indirect
@@ -669,7 +666,6 @@ class ConditionalDimension(DerivedDimension):
 
     @property
     def factor(self):
-        """"""
         return self._factor if self._factor is not None else 1
 
     @property
@@ -784,10 +780,13 @@ class ModuloDimension(DerivedDimension):
 
     is_Modulo = True
 
-    def __init__(self, parent, offset, modulo, name=None):
+    def __new__(cls, parent, offset, modulo, name=None):
         if name is None:
             name = cls._genname(parent.name, (offset, modulo))
-        super().__init__(name, parent)
+        return super().__new__(cls, parent, offset, modulo, name=name) 
+
+    def __init_finalize__(self, parent, offset, modulo, name=None):
+        super().__init_finalize__(name, parent)
         self._offset = offset
         self._modulo = modulo
 
@@ -855,10 +854,13 @@ class IncrDimension(DerivedDimension):
 
     is_Incr = True
 
-    def __init__(self, parent, _min=None, step=None, name=None):
+    def __new__(cls, parent, _min=None, step=None, name=None):
         if name is None:
             name = cls._genname(parent.name, (_min, step))
-        super().__init__(name, parent)
+        return super().__new__(cls, parent, offset, modulo, name=name) 
+
+    def __init_finalize__(self, parent, _min=None, step=None, name=None):
+        super().__init_finalize__(name, parent)
         self._min = _min
         self._step = step
 

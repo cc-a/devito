@@ -9,6 +9,7 @@ from devito.exceptions import InvalidArgument
 from devito.logger import yask as log, yask_warning as warning
 from devito.tools import Signer, memoized_meth, dtype_to_ctype
 import devito.types.basic as basic
+import devito.types.caching as caching
 import devito.types.constant as constant
 import devito.types.dense as dense
 import devito.types.grid as grid
@@ -59,7 +60,7 @@ class Function(dense.Function, Signer):
     from_YASK = True
 
     def __new__(cls, *args, **kwargs):
-        if cls in basic._SymbolCache:
+        if cls in caching._SymbolCache:
             newobj = sympy.Function.__new__(cls, *args, **kwargs.get('options', {}))
             newobj._cached_init()
         else:
