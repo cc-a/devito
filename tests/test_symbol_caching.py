@@ -154,20 +154,16 @@ def test_symbol_cache_aliasing_reverse():
 
 
 def test_clear_cache(nx=1000, ny=1000):
-    #grid = Grid(shape=(nx, ny), dtype=np.float64)
+    grid = Grid(shape=(nx, ny), dtype=np.float64)
     clear_cache()
-    a = dict(_SymbolCache)
     cache_size = len(_SymbolCache)
 
     for i in range(10):
-        try:
-            assert(len(_SymbolCache) == cache_size)
-        except:
-            from IPython import embed; embed()
+        assert(len(_SymbolCache) == cache_size)
 
-        #Function(name='u', grid=grid, space_order=2)
+        Function(name='u', grid=grid, space_order=2)
 
-        #assert(len(_SymbolCache) == cache_size + 1)
+        assert(len(_SymbolCache) == cache_size + 1)
 
         clear_cache()
 

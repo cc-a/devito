@@ -270,7 +270,20 @@ class AbstractCachedUniqueSymbol(AbstractSymbol, Cached):
 
     @classmethod
     def _cache_key(cls, *args, **kwargs):
-        return tuple(args), frozendict(kwargs)
+        args = list(args)
+        key = {}
+
+        # The name is always present, and added as if it were an arg
+        key['name'] = kwargs.pop('name', None) or args.pop(0)
+
+        # From the args
+        key['args'] = tuple(i.__class__ if isinstance(i, Cached) else i for i in args)
+
+        # From the kwargs
+        key.update({k: v.__class__ if isinstance(v, Cached) else v
+                    for k, v in kwargs.items()})
+
+        return frozendict(key)
 
     def __new__(cls, *args, **kwargs):
         key = cls._cache_key(*args, **kwargs)
