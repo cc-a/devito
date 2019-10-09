@@ -177,7 +177,13 @@ def test_symbol_aliasing_reverse():
 
 def test_clear_cache(nx=1000, ny=1000):
     grid = Grid(shape=(nx, ny), dtype=np.float64)
-    clear_cache()
+
+    # nrounds=2 simply ensures that we get a reliable cache_size below, otherwise
+    # the first clear_cache() call at the end of the `for i in range(10)` loop
+    # might free some objects from an older generation (e.g., SparseFunctions
+    # carry children objects which require two rounds to be freed)
+    clear_cache(nrounds=2)
+
     cache_size = len(_SymbolCache)
 
     for i in range(10):
@@ -234,6 +240,44 @@ def test_clear_cache_with_alive_symbols(nx=1000, ny=1000):
     assert len(_SymbolCache) == cache_size - 1
 
 
+def test_sparse_function():
+    """Test caching of SparseFunctions and children objects."""
+    # See `test_clear_cache`'s comment for the reason we call `clear_cache(nrounds=2)`
+    clear_cache(nrounds=2)
+
+    grid = Grid(shape=(3, 3))
+
+    init_cache_size = len(_SymbolCache)
+    cur_cache_size = len(_SymbolCache)
+
+    u = SparseFunction(name='u', grid=grid, npoint=1, nt=10)
+
+    # created: u, p_u, h_p_u, u_coords, d, h_d
+    ncreated = 6
+    assert len(_SymbolCache) == cur_cache_size + ncreated
+
+    cur_cache_size = len(_SymbolCache)
+
+    u.inject(expr=u, field=u)
+
+    # created: ii_u_0*2 (Symbol and ConditionalDimension), ii_u_1*2, ii_u_2*2, ii_u_3*2,
+    # px, py, u_coords (as indexified),
+    ncreated = 2+2+2+2+1+1+1
+    assert len(_SymbolCache) == cur_cache_size + ncreated
+
+    # No new symbolic obejcts are created
+    u.inject(expr=u, field=u)
+    assert len(_SymbolCache) == cur_cache_size + ncreated
+
+    # Let's look at clear_cache now
+    # SparseFunction objects need two rounds of cleanup as the children objects
+    # can't be freed in the first round since the SparseFunction is still pointing
+    # to them
+    del u
+    clear_cache(nrounds=2)
+    assert len(_SymbolCache) == init_cache_size
+
+
 def test_after_indexification():
     """Test to assert that the SymPy cache retrieves the right Devito data object
     after indexification.
@@ -284,6 +328,14 @@ def test_sparse_function_hash(FunctionType):
     u2 = FunctionType(name='u', grid=grid0, npoint=1, nt=10)
     assert u0 is not u2
     assert hash(u0) != hash(u2)
+    # Now with different number of sparse points
+    u3 = FunctionType(name='u', grid=grid0, npoint=2, nt=10)
+    assert u0 is not u3
+    assert hash(u0) != hash(u3)
+    # Now with different number of timesteps stored
+    u4 = FunctionType(name='u', grid=grid0, npoint=1, nt=14)
+    assert u0 is not u4
+    assert hash(u0) != hash(u4)
 
 
 def test_scalar():
