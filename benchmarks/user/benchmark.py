@@ -293,9 +293,7 @@ def plot(problem, **kwargs):
     flop_ceils = kwargs.pop('flop_ceil')
     point_runtime = kwargs.pop('point_runtime')
     autotune = kwargs['autotune']
-
     arch = kwargs['arch']
-
     space_order = "[%s]" % ",".join(str(i) for i in kwargs['space_order'])
     time_order = kwargs['time_order']
     shape = "[%s]" % ",".join(str(i) for i in kwargs['shape'])
@@ -413,6 +411,10 @@ def get_ob_bench(problem, resultsdir, parameters):
             if configuration['mpi']:
                 devito_params['np'] = MPI.COMM_WORLD.size
                 devito_params['rank'] = MPI.COMM_WORLD.rank
+                devito_params['mpi'] = configuration['mpi']
+            else:
+                devito_params['np'] = 1
+                devito_params['rank'] = 0
                 devito_params['mpi'] = configuration['mpi']
 
             return '_'.join(['%s[%s]' % (k, v) for k, v in devito_params.items()])
