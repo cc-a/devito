@@ -17,10 +17,59 @@ __all__ = ['Dimension', 'SpaceDimension', 'TimeDimension', 'DefaultDimension',
            'ModuloDimension', 'IncrDimension']
 
 
-class BasicDimension(ArgProvider):
+class Dimension(ArgProvider):
 
     """
-    Base class of the Dimension class hierarchy.
+    Symbol defining an iteration space.
+
+    A Dimension represents a problem dimension. It is typically used to index
+    into Functions, but it can also appear in the middle of a symbolic expression
+    just like any other symbol.
+
+    Parameters
+    ----------
+    name : str
+        Name of the dimension.
+    spacing : symbol, optional
+        A symbol to represent the physical spacing along this Dimension.
+
+    Examples
+    --------
+    Dimensions are automatically created when a Grid is instantiated.
+
+    >>> from devito import Grid
+    >>> grid = Grid(shape=(4, 4))
+    >>> x, y = grid.dimensions
+    >>> type(x)
+    <class 'devito.types.dimension.x'>
+    >>> time = grid.time_dim
+    >>> type(time)
+    <class 'devito.types.dimension.time'>
+    >>> t = grid.stepping_dim
+    >>> type(t)
+    <class 'devito.types.dimension.t'>
+
+    Alternatively, one can create Dimensions explicitly
+
+    >>> from devito import Dimension
+    >>> i = Dimension(name='i')
+
+    Or, when many "free" Dimensions are needed, with the shortcut
+
+    >>> from devito import dimensions
+    >>> i, j, k = dimensions('i j k')
+
+    A Dimension can be used to build a Function as well as within symbolic
+    expressions, as both array index ("indexed notation") and free symbol.
+
+    >>> from devito import Function
+    >>> f = Function(name='f', shape=(4, 4), dimensions=(i, j))
+    >>> f + f
+    2*f(i, j)
+    >>> f[i + 1, j] + f[i, j + 1]
+    f[i, j + 1] + f[i + 1, j]
+    >>> f*i
+    i*f(i, j)
     """
 
     is_Dimension = True
@@ -40,6 +89,20 @@ class BasicDimension(ArgProvider):
     dtype = np.int32
     _C_typename = 'const %s' % dtype_to_cstr(dtype)
     _C_typedata = _C_typename
+
+    def __new__(cls, *args, **kwargs):
+        """
+        Equivalent to ``BasicDimension(*args, **kwargs)``.
+
+        Notes
+        -----
+        This is only necessary for backwards compatibility, as originally
+        there was no BasicDimension (i.e., Dimension was just the top class).
+        """
+        if cls is Dimension:
+            return BasicDimension(*args, **kwargs)
+        else:
+            return BasicDimension.__new__(cls, *args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -206,67 +269,18 @@ class BasicDimension(ArgProvider):
     __reduce_ex__ = Pickable.__reduce_ex__
 
 
-class Dimension(BasicDimension, AbstractCachedUniqueSymbol):
+class BasicDimension(Dimension, AbstractCachedUniqueSymbol):
 
-    """
-    Symbol defining an iteration space.
+    __doc__ = Dimension.__doc__
 
-    A Dimension represents a problem dimension. It is typically used to index
-    into Functions, but it can also appear in the middle of a symbolic expression
-    just like any other symbol.
-
-    Parameters
-    ----------
-    name : str
-        Name of the dimension.
-    spacing : symbol, optional
-        A symbol to represent the physical spacing along this Dimension.
-
-    Examples
-    --------
-    Dimensions are automatically created when a Grid is instantiated.
-
-    >>> from devito import Grid
-    >>> grid = Grid(shape=(4, 4))
-    >>> x, y = grid.dimensions
-    >>> type(x)
-    <class 'devito.types.dimension.x'>
-    >>> time = grid.time_dim
-    >>> type(time)
-    <class 'devito.types.dimension.time'>
-    >>> t = grid.stepping_dim
-    >>> type(t)
-    <class 'devito.types.dimension.t'>
-
-    Alternatively, one can create Dimensions explicitly
-
-    >>> from devito import Dimension
-    >>> i = Dimension(name='i')
-
-    Or, when many "free" Dimensions are needed, with the shortcut
-
-    >>> from devito import dimensions
-    >>> i, j, k = dimensions('i j k')
-
-    A Dimension can be used to build a Function as well as within symbolic
-    expressions, as both array index ("indexed notation") and free symbol.
-
-    >>> from devito import Function
-    >>> f = Function(name='f', shape=(4, 4), dimensions=(i, j))
-    >>> f + f
-    2*f(i, j)
-    >>> f[i + 1, j] + f[i, j + 1]
-    f[i, j + 1] + f[i + 1, j]
-    >>> f*i
-    i*f(i, j)
-    """
+    def __new__(cls, *args, **kwargs):
+        return AbstractCachedUniqueSymbol.__new__(cls, *args, **kwargs)
 
     def __init_finalize__(self, name, spacing=None):
-        super().__init_finalize__(name)
         self._spacing = spacing or Scalar(name='h_%s' % name, is_const=True)
 
 
-class DefaultDimension(BasicDimension, AbstractCachedMultiSymbol):
+class DefaultDimension(Dimension, AbstractCachedMultiSymbol):
 
     """
     Symbol defining an iteration space with statically-known size.
@@ -275,7 +289,7 @@ class DefaultDimension(BasicDimension, AbstractCachedMultiSymbol):
     ----------
     name : str
         Name of the dimension.
-    spacing : symbol, optional
+    spacing : Symbol, optional
         A symbol to represent the physical spacing along this Dimension.
     default_value : float, optional
         Default value associated with the Dimension.
@@ -288,8 +302,10 @@ class DefaultDimension(BasicDimension, AbstractCachedMultiSymbol):
 
     is_Default = True
 
+    def __new__(cls, *args, **kwargs):
+        return AbstractCachedMultiSymbol.__new__(cls, *args, **kwargs)
+
     def __init_finalize__(self, name, spacing=None, default_value=None):
-        super().__init_finalize__(name)
         self._spacing = spacing or Scalar(name='h_%s' % name, is_const=True)
         self._default_value = default_value or 0
 
@@ -303,13 +319,8 @@ class DefaultDimension(BasicDimension, AbstractCachedMultiSymbol):
         return {dim.min_name: _min or 0, dim.size_name: size,
                 dim.max_name: size if size is None else size-1}
 
-    def _arg_check(self, *args):
-        """A DefaultDimension performs no runtime checks."""
-        return
 
-
-
-class SpaceDimension(Dimension):
+class SpaceDimension(BasicDimension):
 
     """
     Symbol defining an iteration space.
@@ -331,7 +342,7 @@ class SpaceDimension(Dimension):
     is_Space = True
 
 
-class TimeDimension(Dimension):
+class TimeDimension(BasicDimension):
 
     """
     Symbol defining an iteration space.
@@ -352,7 +363,7 @@ class TimeDimension(Dimension):
     is_Time = True
 
 
-class DerivedDimension(Dimension):
+class DerivedDimension(BasicDimension):
 
     """
     Symbol defining an iteration space derived from a ``parent`` Dimension.

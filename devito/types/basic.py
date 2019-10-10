@@ -25,6 +25,7 @@ __all__ = ['Symbol', 'Scalar', 'Array', 'Indexed', 'Object',
 
 
 class Basic(object):
+
     """
     Three relevant types inherit from this class: ::
 
