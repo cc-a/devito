@@ -41,13 +41,13 @@ class Dimension(ArgProvider):
     >>> grid = Grid(shape=(4, 4))
     >>> x, y = grid.dimensions
     >>> type(x)
-    <class 'devito.types.dimension.x'>
+    <class 'devito.types.dimension.SpaceDimension'>
     >>> time = grid.time_dim
     >>> type(time)
-    <class 'devito.types.dimension.time'>
+    <class 'devito.types.dimension.TimeDimension'>
     >>> t = grid.stepping_dim
     >>> type(t)
-    <class 'devito.types.dimension.t'>
+    <class 'devito.types.dimension.SteppingDimension'>
 
     Alternatively, one can create Dimensions explicitly
 
