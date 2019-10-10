@@ -99,6 +99,7 @@ install:
       git clone https://github.com/opesci/opescibench.git;
       cd opescibench;
       pip install -e .;
+      cd ../devito;
     fi
   - if [[ "$MPI_INSTALL" == '1' ]]; then
       pip install -r requirements-optional.txt;
