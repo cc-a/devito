@@ -408,14 +408,9 @@ def get_ob_bench(problem, resultsdir, parameters):
             else:
                 devito_params['nt'] = 1
 
-            if configuration['mpi']:
-                devito_params['np'] = MPI.COMM_WORLD.size
-                devito_params['rank'] = MPI.COMM_WORLD.rank
-                devito_params['mpi'] = configuration['mpi']
-            else:
-                devito_params['np'] = 1
-                devito_params['rank'] = 0
-                devito_params['mpi'] = configuration['mpi']
+            devito_params['np'] = MPI.COMM_WORLD.size
+            devito_params['rank'] = MPI.COMM_WORLD.rank
+            devito_params['mpi'] = configuration['mpi']
 
             return '_'.join(['%s[%s]' % (k, v) for k, v in devito_params.items()])
 
