@@ -17,7 +17,7 @@ def operate_on_empty_cache():
     """
     To be used by tests that assert against the cache size. There are two
     reasons this is required:
-    
+
         * Some symbolic objects, such as DerivedDimensions and SparseFunctions,
           embed further symbolic objects. These objects require more than one
           call to `clear_cache` to be evicted (typically two -- the first call
