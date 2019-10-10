@@ -99,15 +99,14 @@ class CacheManager(object):
     """
 
     @classmethod
-    def clear(cls, force=True, nrounds=1):
-        for _ in range(nrounds):
-            sympy.cache.clear_cache()
+    def clear(cls, force=True):
+        sympy.cache.clear_cache()
 
-            # Maybe trigger garbage collection
-            fire_gc = force or any(i.nbytes > cls.gc_ths for i in _SymbolCache.values())
-            if fire_gc:
-                gc.collect()
+        # Maybe trigger garbage collection
+        fire_gc = force or any(i.nbytes > cls.gc_ths for i in _SymbolCache.values())
+        if fire_gc:
+            gc.collect()
 
-            for key, obj in list(_SymbolCache.items()):
-                if obj() is None:
-                    del _SymbolCache[key]
+        for key, obj in list(_SymbolCache.items()):
+            if obj() is None:
+                del _SymbolCache[key]

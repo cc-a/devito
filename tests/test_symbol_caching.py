@@ -12,6 +12,30 @@ from devito.types.basic import Scalar, Symbol
 pytestmark = skipif(['yask', 'ops'])
 
 
+@pytest.fixture
+def operate_on_empty_cache():
+    """
+    To be used by tests that assert against the cache size. There are two
+    reasons this is required:
+    
+        * Some symbolic objects, such as DerivedDimensions and SparseFunctions,
+          embed further symbolic objects. These objects require more than one
+          call to `clear_cache` to be evicted (typically two -- the first call
+          evicts the main object, then the children become unreferenced and so
+          they are evicted upon the second call). So, depending on what tests
+          were executed before, it is possible that one `clear_cache()` evicts
+          more than expected.
+        * Due to some global symbols in `conftest.py`, it is possible that when
+          for example a SparseFunction is instantiated, fewer symbolic object than
+          expected are created, since some of them are available from the cache
+          already.
+    """
+    old_cache = _SymbolCache.copy()
+    _SymbolCache.clear()
+    yield
+    _SymbolCache.update(old_cache)
+
+
 @pytest.mark.parametrize('FunctionType', [Function, TimeFunction])
 def test_function_new(FunctionType):
     """Test that new u[x, y] instances don't cache"""
@@ -175,15 +199,8 @@ def test_symbol_aliasing_reverse():
     assert u_ref() is None
 
 
-def test_clear_cache(nx=1000, ny=1000):
+def test_clear_cache(operate_on_empty_cache, nx=1000, ny=1000):
     grid = Grid(shape=(nx, ny), dtype=np.float64)
-
-    # nrounds=2 simply ensures that we get a reliable cache_size below, otherwise
-    # the first clear_cache() call at the end of the `for i in range(10)` loop
-    # might free some objects from an older generation (e.g., SparseFunctions
-    # carry children objects which require two rounds to be freed)
-    clear_cache(nrounds=2)
-
     cache_size = len(_SymbolCache)
 
     for i in range(10):
@@ -196,7 +213,7 @@ def test_clear_cache(nx=1000, ny=1000):
         clear_cache()
 
 
-def test_clear_cache_with_alive_symbols(nx=1000, ny=1000):
+def test_clear_cache_with_alive_symbols(operate_on_empty_cache, nx=1000, ny=1000):
     """
     Test that `clear_cache` doesn't affect caching if an object is still alive.
     """
@@ -240,11 +257,8 @@ def test_clear_cache_with_alive_symbols(nx=1000, ny=1000):
     assert len(_SymbolCache) == cache_size - 1
 
 
-def test_sparse_function():
+def test_sparse_function(operate_on_empty_cache):
     """Test caching of SparseFunctions and children objects."""
-    # See `test_clear_cache`'s comment for the reason we call `clear_cache(nrounds=2)`
-    clear_cache(nrounds=2)
-
     grid = Grid(shape=(3, 3))
 
     init_cache_size = len(_SymbolCache)
@@ -270,16 +284,20 @@ def test_sparse_function():
     assert len(_SymbolCache) == cur_cache_size + ncreated
 
     # Let's look at clear_cache now
-    # SparseFunction objects need two rounds of cleanup as the children objects
-    # can't be freed in the first round since the SparseFunction is still pointing
-    # to them
     del u
-    clear_cache(nrounds=2)
+    clear_cache()
+    # At this point, not all children objects have been cleared. In particular, the
+    # ii_u_* Symbols are still alive, as during clear_cache they were still referenced
+    # by the corresponding ConditionalDimensions, through `condition`
+    assert len(_SymbolCache) == init_cache_size + 4
+    clear_cache()
+    # Now we should be back to the original state
     assert len(_SymbolCache) == init_cache_size
 
 
 def test_after_indexification():
-    """Test to assert that the SymPy cache retrieves the right Devito data object
+    """
+    Test to assert that the SymPy cache retrieves the right Devito data object
     after indexification.
     """
     grid = Grid(shape=(4, 4, 4))
