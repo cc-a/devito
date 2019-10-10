@@ -9,66 +9,18 @@ from devito.exceptions import InvalidArgument
 from devito.logger import debug
 from devito.tools import Pickable, dtype_to_cstr
 from devito.types.args import ArgProvider
-from devito.types.basic import AbstractCachedUniqueSymbol, Scalar
+from devito.types.basic import (AbstractCachedUniqueSymbol, AbstractCachedMultiSymbol,
+                                Scalar)
 
 __all__ = ['Dimension', 'SpaceDimension', 'TimeDimension', 'DefaultDimension',
            'SteppingDimension', 'SubDimension', 'ConditionalDimension', 'dimensions',
            'ModuloDimension', 'IncrDimension']
 
 
-class Dimension(AbstractCachedUniqueSymbol, ArgProvider):
+class BasicDimension(ArgProvider):
 
     """
-    Symbol defining an iteration space.
-
-    A Dimension represents a problem dimension. It is typically used to index
-    into Functions, but it can also appear in the middle of a symbolic expression
-    just like any other symbol.
-
-    Parameters
-    ----------
-    name : str
-        Name of the dimension.
-    spacing : symbol, optional
-        A symbol to represent the physical spacing along this Dimension.
-
-    Examples
-    --------
-    Dimensions are automatically created when a Grid is instantiated.
-
-    >>> from devito import Grid
-    >>> grid = Grid(shape=(4, 4))
-    >>> x, y = grid.dimensions
-    >>> type(x)
-    <class 'devito.types.dimension.x'>
-    >>> time = grid.time_dim
-    >>> type(time)
-    <class 'devito.types.dimension.time'>
-    >>> t = grid.stepping_dim
-    >>> type(t)
-    <class 'devito.types.dimension.t'>
-
-    Alternatively, one can create Dimensions explicitly
-
-    >>> from devito import Dimension
-    >>> i = Dimension(name='i')
-
-    Or, when many "free" Dimensions are needed, with the shortcut
-
-    >>> from devito import dimensions
-    >>> i, j, k = dimensions('i j k')
-
-    A Dimension can be used to build a Function as well as within symbolic
-    expressions, as both array index ("indexed notation") and free symbol.
-
-    >>> from devito import Function
-    >>> f = Function(name='f', shape=(4, 4), dimensions=(i, j))
-    >>> f + f
-    2*f(i, j)
-    >>> f[i + 1, j] + f[i, j + 1]
-    f[i, j + 1] + f[i + 1, j]
-    >>> f*i
-    i*f(i, j)
+    Base class of the Dimension class hierarchy.
     """
 
     is_Dimension = True
@@ -88,9 +40,6 @@ class Dimension(AbstractCachedUniqueSymbol, ArgProvider):
     dtype = np.int32
     _C_typename = 'const %s' % dtype_to_cstr(dtype)
     _C_typedata = _C_typename
-
-    def __init_finalize__(self, name, spacing=None):
-        self._spacing = spacing or Scalar(name='h_%s' % name, is_const=True)
 
     def __str__(self):
         return self.name
@@ -257,6 +206,109 @@ class Dimension(AbstractCachedUniqueSymbol, ArgProvider):
     __reduce_ex__ = Pickable.__reduce_ex__
 
 
+class Dimension(BasicDimension, AbstractCachedUniqueSymbol):
+
+    """
+    Symbol defining an iteration space.
+
+    A Dimension represents a problem dimension. It is typically used to index
+    into Functions, but it can also appear in the middle of a symbolic expression
+    just like any other symbol.
+
+    Parameters
+    ----------
+    name : str
+        Name of the dimension.
+    spacing : symbol, optional
+        A symbol to represent the physical spacing along this Dimension.
+
+    Examples
+    --------
+    Dimensions are automatically created when a Grid is instantiated.
+
+    >>> from devito import Grid
+    >>> grid = Grid(shape=(4, 4))
+    >>> x, y = grid.dimensions
+    >>> type(x)
+    <class 'devito.types.dimension.x'>
+    >>> time = grid.time_dim
+    >>> type(time)
+    <class 'devito.types.dimension.time'>
+    >>> t = grid.stepping_dim
+    >>> type(t)
+    <class 'devito.types.dimension.t'>
+
+    Alternatively, one can create Dimensions explicitly
+
+    >>> from devito import Dimension
+    >>> i = Dimension(name='i')
+
+    Or, when many "free" Dimensions are needed, with the shortcut
+
+    >>> from devito import dimensions
+    >>> i, j, k = dimensions('i j k')
+
+    A Dimension can be used to build a Function as well as within symbolic
+    expressions, as both array index ("indexed notation") and free symbol.
+
+    >>> from devito import Function
+    >>> f = Function(name='f', shape=(4, 4), dimensions=(i, j))
+    >>> f + f
+    2*f(i, j)
+    >>> f[i + 1, j] + f[i, j + 1]
+    f[i, j + 1] + f[i + 1, j]
+    >>> f*i
+    i*f(i, j)
+    """
+
+    def __init_finalize__(self, name, spacing=None):
+        super().__init_finalize__(name)
+        self._spacing = spacing or Scalar(name='h_%s' % name, is_const=True)
+
+
+class DefaultDimension(BasicDimension, AbstractCachedMultiSymbol):
+
+    """
+    Symbol defining an iteration space with statically-known size.
+
+    Parameters
+    ----------
+    name : str
+        Name of the dimension.
+    spacing : symbol, optional
+        A symbol to represent the physical spacing along this Dimension.
+    default_value : float, optional
+        Default value associated with the Dimension.
+
+    Notes
+    -----
+    A DefaultDimension carries a value, so it has a mutable state. Hence, it is
+    not cached.
+    """
+
+    is_Default = True
+
+    def __init_finalize__(self, name, spacing=None, default_value=None):
+        super().__init_finalize__(name)
+        self._spacing = spacing or Scalar(name='h_%s' % name, is_const=True)
+        self._default_value = default_value or 0
+
+    @cached_property
+    def symbolic_size(self):
+        return sympy.Number(self._default_value)
+
+    def _arg_defaults(self, _min=None, size=None, alias=None):
+        dim = alias or self
+        size = size or dim._default_value
+        return {dim.min_name: _min or 0, dim.size_name: size,
+                dim.max_name: size if size is None else size-1}
+
+    def _arg_check(self, *args):
+        """A DefaultDimension performs no runtime checks."""
+        return
+
+
+
 class SpaceDimension(Dimension):
 
     """
@@ -298,44 +350,6 @@ class TimeDimension(Dimension):
     """
 
     is_Time = True
-
-
-class DefaultDimension(Dimension):
-
-    """
-    Symbol defining an iteration space with statically-known size.
-
-    Parameters
-    ----------
-    name : str
-        Name of the dimension.
-    spacing : symbol, optional
-        A symbol to represent the physical spacing along this Dimension.
-    default_value : float, optional
-        Default value associated with the Dimension.
-
-    Notes
-    -----
-    A DefaultDimension carries a value, so it has a mutable state. Hence, it is
-    not cached.
-    """
-
-    is_Default = True
-
-    def __new__(cls, name, spacing=None, default_value=None):
-        newobj = Dimension.__xnew__(cls, name)
-        newobj._default_value = default_value or 0
-        return newobj
-
-    @cached_property
-    def symbolic_size(self):
-        return sympy.Number(self._default_value)
-
-    def _arg_defaults(self, _min=None, size=None, alias=None):
-        dim = alias or self
-        size = size or dim._default_value
-        return {dim.min_name: _min or 0, dim.size_name: size,
-                dim.max_name: size if size is None else size-1}
 
 
 class DerivedDimension(Dimension):

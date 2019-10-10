@@ -280,11 +280,10 @@ class AbstractCachedUniqueSymbol(AbstractSymbol, Cached):
         key['name'] = kwargs.pop('name', None) or args.pop(0)
 
         # From the args
-        key['args'] = tuple(i.__class__ if isinstance(i, Cached) else i for i in args)
+        key['args'] = tuple(args)
 
         # From the kwargs
-        key.update({k: v.__class__ if isinstance(v, Cached) else v
-                    for k, v in kwargs.items()})
+        key.update(kwargs)
 
         return frozendict(key)
 
@@ -302,11 +301,9 @@ class AbstractCachedUniqueSymbol(AbstractSymbol, Cached):
                 if i in _assume_rules.defined_facts:
                     assumptions[i] = kwargs.pop(i)
 
-            # Create new, unique type instance from cls and the symbol name
-            newcls = type(name, (cls,), dict(cls.__dict__))
-
-            # Create the new Symbol and invoke __init__
-            newobj = sympy.Symbol.__new__(newcls, name, **assumptions)
+            # Create the new Symbol
+            # Note: use __xnew__ to bypass sympy caching
+            newobj = sympy.Symbol.__xnew__(cls, name, **assumptions)
 
             # Initialization
             newobj._dtype = cls.__dtype_setup__(**kwargs)
@@ -362,11 +359,17 @@ class AbstractCachedMultiSymbol(AbstractSymbol, Cached):
             options = dict(kwargs)
             name = options.pop('name', None) or args[0]
 
+            # Extract sympy.Symbol-specific kwargs
+            assumptions = {}
+            for i in list(kwargs):
+                if i in _assume_rules.defined_facts:
+                    assumptions[i] = kwargs.pop(i)
+
             # Create new, unique type instance from cls and the symbol name
             newcls = type(name, (cls,), dict(cls.__dict__))
 
             # Create the new Symbol and invoke __init__
-            newobj = sympy.Symbol.__new__(newcls, name, **options)
+            newobj = sympy.Symbol.__new__(newcls, name, **assumptions)
 
             # Initialization
             newobj._dtype = cls.__dtype_setup__(**kwargs)

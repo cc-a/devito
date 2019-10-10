@@ -6,7 +6,7 @@ import pytest
 from conftest import skipif
 from devito import (Grid, Function, TimeFunction, SparseFunction, SparseTimeFunction,
                     ConditionalDimension, SubDimension, Constant, Operator, Eq, Dimension,
-                    _SymbolCache, clear_cache)
+                    DefaultDimension, _SymbolCache, clear_cache)
 from devito.types.basic import Scalar, Symbol
 
 pytestmark = skipif(['yask', 'ops'])
@@ -18,13 +18,14 @@ def operate_on_empty_cache():
     To be used by tests that assert against the cache size. There are two
     reasons this is required:
 
-        * Some symbolic objects, such as DerivedDimensions and SparseFunctions,
-          embed further symbolic objects. These objects require more than one
-          call to `clear_cache` to be evicted (typically two -- the first call
+        * Most symbolic objects embed further symbolic objects. For example,
+          Function embeds Dimension, DerivedDimension embed a parent Dimension,
+          and so on. The embedded objects require more than one call to
+          `clear_cache` to be evicted (typically two -- the first call
           evicts the main object, then the children become unreferenced and so
           they are evicted upon the second call). So, depending on what tests
           were executed before, it is possible that one `clear_cache()` evicts
-          more than expected.
+          more than expected, making it impossible to assert against cache sizes.
         * Due to some global symbols in `conftest.py`, it is possible that when
           for example a SparseFunction is instantiated, fewer symbolic object than
           expected are created, since some of them are available from the cache
@@ -287,9 +288,10 @@ def test_sparse_function(operate_on_empty_cache):
     del u
     clear_cache()
     # At this point, not all children objects have been cleared. In particular, the
-    # ii_u_* Symbols are still alive, as during clear_cache they were still referenced
-    # by the corresponding ConditionalDimensions, through `condition`
-    assert len(_SymbolCache) == init_cache_size + 4
+    # ii_u_* Symbols are still alive, as well as p_u and h_p_u. This is because
+    # in the first clear_cache they were still referenced by their "parent" objects
+    # (e.g., ii_u_* by ConditionalDimensions, through `condition`)
+    assert len(_SymbolCache) == init_cache_size + 6
     clear_cache()
     # Now we should be back to the original state
     assert len(_SymbolCache) == init_cache_size
@@ -316,6 +318,69 @@ def test_constant_hash():
     c1 = Constant(name='c')
     assert c0 is not c1
     assert hash(c0) != hash(c1)
+
+
+def test_dimension_hash():
+    """Test that different Dimensions have different hash value."""
+    d0 = Dimension(name='d')
+    s0 = Scalar(name='s')
+    d1 = Dimension(name='d', spacing=s0)
+    assert hash(d0) != hash(d1)
+
+    s1 = Scalar(name='s', dtype=np.int32)
+    d2 = Dimension(name='d', spacing=s1)
+    assert hash(d1) != hash(d2)
+
+    d3 = Dimension(name='d', spacing=Constant(name='s1'))
+    assert hash(d3) != hash(d0)
+    assert hash(d3) != hash(d1)
+
+
+def test_sub_dimension_hash():
+    """Test that different SubDimensions have different hash value."""
+    d0 = Dimension(name='d')
+    d1 = Dimension(name='d', spacing=Scalar(name='s'))
+
+    di0 = SubDimension.middle('di', d0, 1, 1)
+    di1 = SubDimension.middle('di', d1, 1, 1)
+    assert hash(di0) != hash(d0)
+    assert hash(di0) != hash(di1)
+
+    dl0 = SubDimension.left('dl', d0, 2)
+    assert hash(dl0) != hash(di0)
+
+
+def test_conditional_dimension_hash():
+    """Test that different ConditionalDimensions have different hash value."""
+    d0 = Dimension(name='d')
+    s0 = Scalar(name='s')
+    d1 = Dimension(name='d', spacing=s0)
+
+    cd0 = ConditionalDimension(name='cd', parent=d0, factor=4)
+    cd1 = ConditionalDimension(name='cd', parent=d0, factor=5)
+    assert cd0 is not cd1
+    assert hash(cd0) != hash(cd1)
+
+    cd2 = ConditionalDimension(name='cd', parent=d0, factor=4, indirect=True)
+    assert hash(cd0) != hash(cd2)
+
+    cd3 = ConditionalDimension(name='cd', parent=d1, factor=4)
+    assert hash(cd0) != hash(cd3)
+
+    s1 = Scalar(name='s', dtype=np.int32)
+    cd4 = ConditionalDimension(name='cd', parent=d0, factor=4, condition=s0 > 3)
+    assert hash(cd0) != hash(cd4)
+
+    cd5 = ConditionalDimension(name='cd', parent=d0, factor=4, condition=s1 > 3)
+    assert hash(cd0) != hash(cd5)
+    assert hash(cd4) != hash(cd5)
+
+
+def test_default_dimension_hash():
+    """Test that different DefaultDimensions have different hash value."""
+    dd0 = DefaultDimension(name='dd')
+    dd1 = DefaultDimension(name='dd')
+    assert hash(dd0) != hash(dd1)
 
 
 @pytest.mark.parametrize('FunctionType', [Function, TimeFunction])
@@ -457,6 +522,15 @@ def test_sub_dimension():
     xr0 = SubDimension.right('xr', x, 1)
     xr1 = SubDimension.right('xr', x, 1)
     assert xr0 is xr1
+
+
+def test_default_dimension():
+    d = Dimension(name='d')
+    dd0 = DefaultDimension(name='d')
+    assert d is not dd0
+
+    dd1 = DefaultDimension(name='d')
+    assert dd0 is not dd1
 
 
 def test_operator_leakage_function():
