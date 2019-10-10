@@ -338,10 +338,6 @@ class AbstractCachedUniqueSymbol(AbstractSymbol, Cached):
     _pickle_kwargs = ['name', 'dtype', 'is_const']
     __reduce_ex__ = Pickable.__reduce_ex__
 
-    @property
-    def _pickle_reconstruct(self):
-        return self.__class__.__base__
-
 
 class AbstractCachedMultiSymbol(AbstractSymbol, Cached):
 
